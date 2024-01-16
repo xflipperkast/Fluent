@@ -252,10 +252,12 @@ function Element:New(Idx, Config)
 		local Values = Dropdown.Values
 		local Buttons = {}
 
-		for _, Element in next, DropdownScrollFrame:GetChildren() do
-			if not Element:IsA("UIListLayout") then
-				Element:Destroy()
-			end
+		local children = DropdownScrollFrame:GetChildren()
+		for i = 1, #children do
+		    local element = children[i]
+		    if not element:IsA("UIListLayout") then
+		        element:Destroy()
+		    end
 		end
 
 		local Count = 0
