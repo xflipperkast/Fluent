@@ -1,498 +1,512 @@
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local Mouse = game:GetService("Players").LocalPlayer:GetMouse()
-local Camera = game:GetService("Workspace").CurrentCamera
+local TouchInputService = game:GetService("TouchInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local RenderStepped = RunService.RenderStepped
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 
 local Root = script.Parent.Parent
 local Creator = require(Root.Creator)
-local Flipper = require(Root.Packages.Flipper)
 
 local New = Creator.New
 local Components = Root.Components
 
 local Element = {}
 Element.__index = Element
-Element.__type = "Dropdown"
+Element.__type = "Colorpicker"
 
 function Element:New(Idx, Config)
 	local Library = self.Library
+	assert(Config.Title, "Colorpicker - Missing Title")
+	assert(Config.Default, "AddColorPicker: Missing default value.")
 
-	local Dropdown = {
-		Values = Config.Values,
+	local Colorpicker = {
 		Value = Config.Default,
-		Multi = Config.Multi,
-		Buttons = {},
-		Opened = false,
-		Type = "Dropdown",
-		Callback = Config.Callback or function() end,
+		Transparency = Config.Transparency or 0,
+		Type = "Colorpicker",
+		Title = type(Config.Title) == "string" and Config.Title or "Colorpicker",
+		Callback = Config.Callback or function(Color) end,
 	}
 
-	local DropdownFrame = require(Components.Element)(Config.Title, Config.Description, self.Container, false)
-	DropdownFrame.DescLabel.Size = UDim2.new(1, -170, 0, 14)
+	function Colorpicker:SetHSVFromRGB(Color)
+		local H, S, V = Color3.toHSV(Color)
+		Colorpicker.Hue = H
+		Colorpicker.Sat = S
+		Colorpicker.Vib = V
+	end
 
-	Dropdown.SetTitle = DropdownFrame.SetTitle
-	Dropdown.SetDesc = DropdownFrame.SetDesc
+	Colorpicker:SetHSVFromRGB(Colorpicker.Value)
 
-	local DropdownDisplay = New("TextLabel", {
-		FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
-		Text = "Value",
-		TextColor3 = Color3.fromRGB(240, 240, 240),
-		TextSize = 13,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, -30, 0, 14),
-		Position = UDim2.new(0, 8, 0.5, 0),
-		AnchorPoint = Vector2.new(0, 0.5),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		BackgroundTransparency = 1,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		ThemeTag = {
-			TextColor3 = "Text",
-		},
+	local ColorpickerFrame = require(Components.Element)(Config.Title, Config.Description, self.Container, true)
+
+	Colorpicker.SetTitle = ColorpickerFrame.SetTitle
+	Colorpicker.SetDesc = ColorpickerFrame.SetDesc
+
+	local DisplayFrameColor = New("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Colorpicker.Value,
+		Parent = ColorpickerFrame.Frame,
+	}, {
+		New("UICorner", {
+			CornerRadius = UDim.new(0, 4),
+		}),
 	})
 
-	local DropdownIco = New("ImageLabel", {
-		Image = "rbxassetid://10709790948",
-		Size = UDim2.fromOffset(16, 16),
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -8, 0.5, 0),
-		BackgroundTransparency = 1,
-		ThemeTag = {
-			ImageColor3 = "SubText",
-		},
-	})
-
-	local DropdownInner = New("TextButton", {
-		Size = UDim2.fromOffset(160, 30),
+	local DisplayFrame = New("ImageLabel", {
+		Size = UDim2.fromOffset(26, 26),
 		Position = UDim2.new(1, -10, 0.5, 0),
 		AnchorPoint = Vector2.new(1, 0.5),
-		BackgroundTransparency = 0.9,
-		Parent = DropdownFrame.Frame,
-		ThemeTag = {
-			BackgroundColor3 = "DropdownFrame",
-		},
+		Parent = ColorpickerFrame.Frame,
+		Image = "http://www.roblox.com/asset/?id=14204231522",
+		ImageTransparency = 0.45,
+		ScaleType = Enum.ScaleType.Tile,
+		TileSize = UDim2.fromOffset(40, 40),
 	}, {
 		New("UICorner", {
-			CornerRadius = UDim.new(0, 5),
+			CornerRadius = UDim.new(0, 4),
 		}),
-		New("UIStroke", {
-			Transparency = 0.5,
-			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-			ThemeTag = {
-				Color = "InElementBorder",
-			},
-		}),
-		DropdownIco,
-		DropdownDisplay,
+		DisplayFrameColor,
 	})
 
-	local DropdownListLayout = New("UIListLayout", {
-		Padding = UDim.new(0, 3),
-	})
+	local function CreateColorDialog()
+		local Dialog = require(Components.Dialog):Create()
+		Dialog.Title.Text = Colorpicker.Title
+		Dialog.Root.Size = UDim2.fromOffset(430, 330)
 
-	local DropdownScrollFrame = New("ScrollingFrame", {
-		Size = UDim2.new(1, -5, 1, -10),
-		Position = UDim2.fromOffset(5, 5),
-		BackgroundTransparency = 1,
-		BottomImage = "rbxassetid://6889812791",
-		MidImage = "rbxassetid://6889812721",
-		TopImage = "rbxassetid://6276641225",
-		ScrollBarImageColor3 = Color3.fromRGB(255, 255, 255),
-		ScrollBarImageTransparency = 0.95,
-		ScrollBarThickness = 4,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.fromScale(0, 0),
-	}, {
-		DropdownListLayout,
-	})
+		local Hue, Sat, Vib = Colorpicker.Hue, Colorpicker.Sat, Colorpicker.Vib
+		local Transparency = Colorpicker.Transparency
 
-	local DropdownHolderFrame = New("Frame", {
-		Size = UDim2.fromScale(1, 0.6),
-		ThemeTag = {
-			BackgroundColor3 = "DropdownHolder",
-		},
-	}, {
-		DropdownScrollFrame,
-		New("UICorner", {
-			CornerRadius = UDim.new(0, 7),
-		}),
-		New("UIStroke", {
-			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-			ThemeTag = {
-				Color = "DropdownBorder",
-			},
-		}),
-		New("ImageLabel", {
-			BackgroundTransparency = 1,
-			Image = "http://www.roblox.com/asset/?id=5554236805",
-			ScaleType = Enum.ScaleType.Slice,
-			SliceCenter = Rect.new(23, 23, 277, 277),
-			Size = UDim2.fromScale(1, 1) + UDim2.fromOffset(30, 30),
-			Position = UDim2.fromOffset(-15, -15),
-			ImageColor3 = Color3.fromRGB(0, 0, 0),
-			ImageTransparency = 0.1,
-		}),
-	})
+		local function CreateInput()
+			local Box = require(Components.Textbox)()
+			Box.Frame.Parent = Dialog.Root
+			Box.Frame.Size = UDim2.new(0, 90, 0, 32)
 
-	local DropdownHolderCanvas = New("Frame", {
-		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(170, 300),
-		Parent = self.Library.GUI,
-		Visible = false,
-	}, {
-		DropdownHolderFrame,
-		New("UISizeConstraint", {
-			MinSize = Vector2.new(170, 0),
-		}),
-	})
-	table.insert(Library.OpenFrames, DropdownHolderCanvas)
-
-	local function RecalculateListPosition()
-		local Add = 0
-		if Camera.ViewportSize.Y - DropdownInner.AbsolutePosition.Y < DropdownHolderCanvas.AbsoluteSize.Y - 5 then
-			Add = DropdownHolderCanvas.AbsoluteSize.Y
-				- 5
-				- (Camera.ViewportSize.Y - DropdownInner.AbsolutePosition.Y)
-				+ 40
-		end
-		DropdownHolderCanvas.Position =
-			UDim2.fromOffset(DropdownInner.AbsolutePosition.X - 1, DropdownInner.AbsolutePosition.Y - 5 - Add)
-	end
-
-	local ListSizeX = 0
-	local function RecalculateListSize()
-		if #Dropdown.Values > 10 then
-			DropdownHolderCanvas.Size = UDim2.fromOffset(ListSizeX, 392)
-		else
-			DropdownHolderCanvas.Size = UDim2.fromOffset(ListSizeX, DropdownListLayout.AbsoluteContentSize.Y + 10)
-		end
-	end
-
-	local function RecalculateCanvasSize()
-		DropdownScrollFrame.CanvasSize = UDim2.fromOffset(0, DropdownListLayout.AbsoluteContentSize.Y)
-	end
-
-	RecalculateListPosition()
-	RecalculateListSize()
-
-	Creator.AddSignal(DropdownInner:GetPropertyChangedSignal("AbsolutePosition"), RecalculateListPosition)
-
-	Creator.AddSignal(DropdownInner.MouseButton1Click, function()
-		Dropdown:Open()
-	end)
-
-	Creator.AddSignal(UserInputService.InputBegan, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseButton1
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
-			local AbsPos, AbsSize = DropdownHolderFrame.AbsolutePosition, DropdownHolderFrame.AbsoluteSize
-			if
-				Mouse.X < AbsPos.X
-				or Mouse.X > AbsPos.X + AbsSize.X
-				or Mouse.Y < (AbsPos.Y - 20 - 1)
-				or Mouse.Y > AbsPos.Y + AbsSize.Y
-			then
-				Dropdown:Close()
-			end
-		end
-	end)
-
-	local ScrollFrame = self.ScrollFrame
-	function Dropdown:Open()
-		Dropdown.Opened = true
-		ScrollFrame.ScrollingEnabled = false
-		DropdownHolderCanvas.Visible = true
-		TweenService:Create(
-			DropdownHolderFrame,
-			TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-			{ Size = UDim2.fromScale(1, 1) }
-		):Play()
-	end
-
-	function Dropdown:Close()
-		Dropdown.Opened = false
-		ScrollFrame.ScrollingEnabled = true
-		DropdownHolderFrame.Size = UDim2.fromScale(1, 0.6)
-		DropdownHolderCanvas.Visible = false
-	end
-
-	function Dropdown:Display()
-		local Values = Dropdown.Values
-		local Str = ""
-
-		if Config.Multi then
-			for Idx, Value in next, Values do
-				if Dropdown.Value[Value] then
-					Str = Str .. Value .. ", "
-				end
-			end
-			Str = Str:sub(1, #Str - 2)
-		else
-			Str = Dropdown.Value or ""
+			return Box
 		end
 
-		DropdownDisplay.Text = (Str == "" and "--" or Str)
-	end
-
-	function Dropdown:GetActiveValues()
-		if Config.Multi then
-			local T = {}
-
-			for Value, Bool in next, Dropdown.Value do
-				table.insert(T, Value)
-			end
-
-			return T
-		else
-			return Dropdown.Value and 1 or 0
-		end
-	end
-
-	function Dropdown:BuildDropdownList()
-		local Values = Dropdown.Values
-		local Buttons = {}
-
-		local children = DropdownScrollFrame:GetChildren()
-		for i = 1, #children do
-		    local element = children[i]
-		    if not element:IsA("UIListLayout") then
-		        element:Destroy()
-		    end
-		end
-
-		local Count = 0
-
-		for Idx, Value in next, Values do
-			local Table = {}
-
-			Count = Count + 1
-
-			local ButtonSelector = New("Frame", {
-				Size = UDim2.fromOffset(4, 14),
-				BackgroundColor3 = Color3.fromRGB(76, 194, 255),
-				Position = UDim2.fromOffset(-1, 16),
-				AnchorPoint = Vector2.new(0, 0.5),
-				ThemeTag = {
-					BackgroundColor3 = "Accent",
-				},
-			}, {
-				New("UICorner", {
-					CornerRadius = UDim.new(0, 2),
-				}),
-			})
-
-			local ButtonLabel = New("TextLabel", {
-				FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json"),
-				Text = Value,
-				TextColor3 = Color3.fromRGB(200, 200, 200),
+		local function CreateInputLabel(Text, Pos)
+			return New("TextLabel", {
+				FontFace = Font.new(
+					"rbxasset://fonts/families/GothamSSm.json",
+					Enum.FontWeight.Medium,
+					Enum.FontStyle.Normal
+				),
+				Text = Text,
+				TextColor3 = Color3.fromRGB(240, 240, 240),
 				TextSize = 13,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-				AutomaticSize = Enum.AutomaticSize.Y,
+				Size = UDim2.new(1, 0, 0, 32),
+				Position = Pos,
 				BackgroundTransparency = 1,
-				Size = UDim2.fromScale(1, 1),
-				Position = UDim2.fromOffset(10, 0),
-				Name = "ButtonLabel",
+				Parent = Dialog.Root,
 				ThemeTag = {
 					TextColor3 = "Text",
 				},
 			})
+		end
 
-			local Button = New("TextButton", {
-				Size = UDim2.new(1, -5, 0, 32),
+		local function GetRGB()
+			local Value = Color3.fromHSV(Hue, Sat, Vib)
+			return { R = math.floor(Value.r * 255), G = math.floor(Value.g * 255), B = math.floor(Value.b * 255) }
+		end
+
+		local SatCursor = New("ImageLabel", {
+			Size = UDim2.new(0, 18, 0, 18),
+			ScaleType = Enum.ScaleType.Fit,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Image = "http://www.roblox.com/asset/?id=4805639000",
+		})
+
+		local SatVibMap = New("ImageLabel", {
+			Size = UDim2.fromOffset(180, 160),
+			Position = UDim2.fromOffset(20, 55),
+			Image = "rbxassetid://4155801252",
+			BackgroundColor3 = Colorpicker.Value,
+			BackgroundTransparency = 0,
+			Parent = Dialog.Root,
+		}, {
+			New("UICorner", {
+				CornerRadius = UDim.new(0, 4),
+			}),
+			SatCursor,
+		})
+
+		local OldColorFrame = New("Frame", {
+			BackgroundColor3 = Colorpicker.Value,
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = Colorpicker.Transparency,
+		}, {
+			New("UICorner", {
+				CornerRadius = UDim.new(0, 4),
+			}),
+		})
+
+		local OldColorFrameChecker = New("ImageLabel", {
+			Image = "http://www.roblox.com/asset/?id=14204231522",
+			ImageTransparency = 0.45,
+			ScaleType = Enum.ScaleType.Tile,
+			TileSize = UDim2.fromOffset(40, 40),
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(112, 220),
+			Size = UDim2.fromOffset(88, 24),
+			Parent = Dialog.Root,
+		}, {
+			New("UICorner", {
+				CornerRadius = UDim.new(0, 4),
+			}),
+			New("UIStroke", {
+				Thickness = 2,
+				Transparency = 0.75,
+			}),
+			OldColorFrame,
+		})
+
+		local DialogDisplayFrame = New("Frame", {
+			BackgroundColor3 = Colorpicker.Value,
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 0,
+		}, {
+			New("UICorner", {
+				CornerRadius = UDim.new(0, 4),
+			}),
+		})
+
+		local DialogDisplayFrameChecker = New("ImageLabel", {
+			Image = "http://www.roblox.com/asset/?id=14204231522",
+			ImageTransparency = 0.45,
+			ScaleType = Enum.ScaleType.Tile,
+			TileSize = UDim2.fromOffset(40, 40),
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(20, 220),
+			Size = UDim2.fromOffset(88, 24),
+			Parent = Dialog.Root,
+		}, {
+			New("UICorner", {
+				CornerRadius = UDim.new(0, 4),
+			}),
+			New("UIStroke", {
+				Thickness = 2,
+				Transparency = 0.75,
+			}),
+			DialogDisplayFrame,
+		})
+
+		local SequenceTable = {}
+
+		for Color = 0, 1, 0.1 do
+			table.insert(SequenceTable, ColorSequenceKeypoint.new(Color, Color3.fromHSV(Color, 1, 1)))
+		end
+
+		local HueSliderGradient = New("UIGradient", {
+			Color = ColorSequence.new(SequenceTable),
+			Rotation = 90,
+		})
+
+		local HueDragHolder = New("Frame", {
+			Size = UDim2.new(1, 0, 1, -10),
+			Position = UDim2.fromOffset(0, 5),
+			BackgroundTransparency = 1,
+		})
+
+		local HueDrag = New("ImageLabel", {
+			Size = UDim2.fromOffset(14, 14),
+			Image = "http://www.roblox.com/asset/?id=12266946128",
+			Parent = HueDragHolder,
+			ThemeTag = {
+				ImageColor3 = "DialogInput",
+			},
+		})
+
+		local HueSlider = New("Frame", {
+			Size = UDim2.fromOffset(12, 190),
+			Position = UDim2.fromOffset(210, 55),
+			Parent = Dialog.Root,
+		}, {
+			New("UICorner", {
+				CornerRadius = UDim.new(1, 0),
+			}),
+			HueSliderGradient,
+			HueDragHolder,
+		})
+
+		local HexInput = CreateInput()
+		HexInput.Frame.Position = UDim2.fromOffset(Config.Transparency and 260 or 240, 55)
+		CreateInputLabel("Hex", UDim2.fromOffset(Config.Transparency and 360 or 340, 55))
+
+		local RedInput = CreateInput()
+		RedInput.Frame.Position = UDim2.fromOffset(Config.Transparency and 260 or 240, 95)
+		CreateInputLabel("Red", UDim2.fromOffset(Config.Transparency and 360 or 340, 95))
+
+		local GreenInput = CreateInput()
+		GreenInput.Frame.Position = UDim2.fromOffset(Config.Transparency and 260 or 240, 135)
+		CreateInputLabel("Green", UDim2.fromOffset(Config.Transparency and 360 or 340, 135))
+
+		local BlueInput = CreateInput()
+		BlueInput.Frame.Position = UDim2.fromOffset(Config.Transparency and 260 or 240, 175)
+		CreateInputLabel("Blue", UDim2.fromOffset(Config.Transparency and 360 or 340, 175))
+
+		local AlphaInput
+		if Config.Transparency then
+			AlphaInput = CreateInput()
+			AlphaInput.Frame.Position = UDim2.fromOffset(260, 215)
+			CreateInputLabel("Alpha", UDim2.fromOffset(360, 215))
+		end
+
+		local TransparencySlider, TransparencyDrag, TransparencyColor
+		if Config.Transparency then
+			local TransparencyDragHolder = New("Frame", {
+				Size = UDim2.new(1, 0, 1, -10),
+				Position = UDim2.fromOffset(0, 5),
 				BackgroundTransparency = 1,
-				ZIndex = 23,
-				Text = "",
-				Parent = DropdownScrollFrame,
+			})
+
+			TransparencyDrag = New("ImageLabel", {
+				Size = UDim2.fromOffset(14, 14),
+				Image = "http://www.roblox.com/asset/?id=12266946128",
+				Parent = TransparencyDragHolder,
 				ThemeTag = {
-					BackgroundColor3 = "DropdownOption",
+					ImageColor3 = "DialogInput",
 				},
+			})
+
+			TransparencyColor = New("Frame", {
+				Size = UDim2.fromScale(1, 1),
 			}, {
-				ButtonSelector,
-				ButtonLabel,
+				New("UIGradient", {
+					Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0),
+						NumberSequenceKeypoint.new(1, 1),
+					}),
+					Rotation = 270,
+				}),
 				New("UICorner", {
-					CornerRadius = UDim.new(0, 6),
+					CornerRadius = UDim.new(1, 0),
 				}),
 			})
 
-			local Selected
+			TransparencySlider = New("Frame", {
+				Size = UDim2.fromOffset(12, 190),
+				Position = UDim2.fromOffset(230, 55),
+				Parent = Dialog.Root,
+				BackgroundTransparency = 1,
+			}, {
+				New("UICorner", {
+					CornerRadius = UDim.new(1, 0),
+				}),
+				New("ImageLabel", {
+					Image = "http://www.roblox.com/asset/?id=14204231522",
+					ImageTransparency = 0.45,
+					ScaleType = Enum.ScaleType.Tile,
+					TileSize = UDim2.fromOffset(40, 40),
+					BackgroundTransparency = 1,
+					Size = UDim2.fromScale(1, 1),
+					Parent = Dialog.Root,
+				}, {
+					New("UICorner", {
+						CornerRadius = UDim.new(1, 0),
+					}),
+				}),
+				TransparencyColor,
+				TransparencyDragHolder,
+			})
+		end
 
-			if Config.Multi then
-				Selected = Dropdown.Value[Value]
-			else
-				Selected = Dropdown.Value == Value
+		local function Display()
+			SatVibMap.BackgroundColor3 = Color3.fromHSV(Hue, 1, 1)
+			HueDrag.Position = UDim2.new(0, -1, Hue, -6)
+			SatCursor.Position = UDim2.new(Sat, 0, 1 - Vib, 0)
+			DialogDisplayFrame.BackgroundColor3 = Color3.fromHSV(Hue, Sat, Vib)
+
+			HexInput.Input.Text = "#" .. Color3.fromHSV(Hue, Sat, Vib):ToHex()
+			RedInput.Input.Text = GetRGB()["R"]
+			GreenInput.Input.Text = GetRGB()["G"]
+			BlueInput.Input.Text = GetRGB()["B"]
+
+			if Config.Transparency then
+				TransparencyColor.BackgroundColor3 = Color3.fromHSV(Hue, Sat, Vib)
+				DialogDisplayFrame.BackgroundTransparency = Transparency
+				TransparencyDrag.Position = UDim2.new(0, -1, 1 - Transparency, -6)
+				AlphaInput.Input.Text = require(Root):Round((1 - Transparency) * 100, 0) .. "%"
 			end
+		end
 
-			local BackMotor, SetBackTransparency = Creator.SpringMotor(1, Button, "BackgroundTransparency")
-			local SelMotor, SetSelTransparency = Creator.SpringMotor(1, ButtonSelector, "BackgroundTransparency")
-			local SelectorSizeMotor = Flipper.SingleMotor.new(6)
-
-			SelectorSizeMotor:onStep(function(value)
-				ButtonSelector.Size = UDim2.new(0, 4, 0, value)
-			end)
-
-			Creator.AddSignal(Button.MouseEnter, function()
-				SetBackTransparency(Selected and 0.85 or 0.89)
-			end)
-			Creator.AddSignal(Button.MouseLeave, function()
-				SetBackTransparency(Selected and 0.89 or 1)
-			end)
-			Creator.AddSignal(Button.MouseButton1Down, function()
-				SetBackTransparency(0.92)
-			end)
-			Creator.AddSignal(Button.MouseButton1Up, function()
-				SetBackTransparency(Selected and 0.85 or 0.89)
-			end)
-
-			function Table:UpdateButton()
-				if Config.Multi then
-					Selected = Dropdown.Value[Value]
-					if Selected then
-						SetBackTransparency(0.89)
-					end
-				else
-					Selected = Dropdown.Value == Value
-					SetBackTransparency(Selected and 0.89 or 1)
+		Creator.AddSignal(HexInput.Input.FocusLost, function(Enter)
+			if Enter then
+				local Success, Result = pcall(Color3.fromHex, HexInput.Input.Text)
+				if Success and typeof(Result) == "Color3" then
+					Hue, Sat, Vib = Color3.toHSV(Result)
 				end
-
-				SelectorSizeMotor:setGoal(Flipper.Spring.new(Selected and 14 or 6, { frequency = 6 }))
-				SetSelTransparency(Selected and 0 or 1)
 			end
+			Display()
+		end)
 
-			ButtonLabel.InputBegan:Connect(function(Input)
-				if
-					Input.UserInputType == Enum.UserInputType.MouseButton1
-					or Input.UserInputType == Enum.UserInputType.Touch
-				then
-					local Try = not Selected
+		Creator.AddSignal(RedInput.Input.FocusLost, function(Enter)
+			if Enter then
+				local CurrentColor = GetRGB()
+				local Success, Result = pcall(Color3.fromRGB, RedInput.Input.Text, CurrentColor["G"], CurrentColor["B"])
+				if Success and typeof(Result) == "Color3" then
+					if tonumber(RedInput.Input.Text) <= 255 then
+						Hue, Sat, Vib = Color3.toHSV(Result)
+					end
+				end
+			end
+			Display()
+		end)
 
-					if Dropdown:GetActiveValues() == 1 and not Try and not Config.AllowNull then
-					else
-						if Config.Multi then
-							Selected = Try
-							Dropdown.Value[Value] = Selected and true or nil
-						else
-							Selected = Try
-							Dropdown.Value = Selected and Value or nil
+		Creator.AddSignal(GreenInput.Input.FocusLost, function(Enter)
+			if Enter then
+				local CurrentColor = GetRGB()
+				local Success, Result =
+					pcall(Color3.fromRGB, CurrentColor["R"], GreenInput.Input.Text, CurrentColor["B"])
+				if Success and typeof(Result) == "Color3" then
+					if tonumber(GreenInput.Input.Text) <= 255 then
+						Hue, Sat, Vib = Color3.toHSV(Result)
+					end
+				end
+			end
+			Display()
+		end)
 
-							for _, OtherButton in next, Buttons do
-								OtherButton:UpdateButton()
-							end
+		Creator.AddSignal(BlueInput.Input.FocusLost, function(Enter)
+			if Enter then
+				local CurrentColor = GetRGB()
+				local Success, Result =
+					pcall(Color3.fromRGB, CurrentColor["R"], CurrentColor["G"], BlueInput.Input.Text)
+				if Success and typeof(Result) == "Color3" then
+					if tonumber(BlueInput.Input.Text) <= 255 then
+						Hue, Sat, Vib = Color3.toHSV(Result)
+					end
+				end
+			end
+			Display()
+		end)
+
+		if Config.Transparency then
+			Creator.AddSignal(AlphaInput.Input.FocusLost, function(Enter)
+				if Enter then
+					pcall(function()
+						local Value = tonumber(AlphaInput.Input.Text)
+						if Value >= 0 and Value <= 100 then
+							Transparency = 1 - Value * 0.01
 						end
+					end)
+				end
+				Display()
+			end)
+		end
 
-						Table:UpdateButton()
-						Dropdown:Display()
+		Creator.AddSignal(SatVibMap.InputBegan, function(Input)
+			if
+				Input.UserInputType == Enum.UserInputType.MouseButton1
+				or Input.UserInputType == Enum.UserInputType.Touch
+			then
+				while UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+					local MinX = SatVibMap.AbsolutePosition.X
+					local MaxX = MinX + SatVibMap.AbsoluteSize.X
+					local MouseX = math.clamp(Mouse.X, MinX, MaxX)
 
-						Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
-						Library:SafeCallback(Dropdown.Changed, Dropdown.Value)
+					local MinY = SatVibMap.AbsolutePosition.Y
+					local MaxY = MinY + SatVibMap.AbsoluteSize.Y
+					local MouseY = math.clamp(Mouse.Y, MinY, MaxY)
+
+					Sat = (MouseX - MinX) / (MaxX - MinX)
+					Vib = 1 - ((MouseY - MinY) / (MaxY - MinY))
+					Display()
+
+					RenderStepped:Wait()
+				end
+			end
+		end)
+
+		Creator.AddSignal(HueSlider.InputBegan, function(Input)
+			if
+				Input.UserInputType == Enum.UserInputType.MouseButton1
+				or Input.UserInputType == Enum.UserInputType.Touch
+			then
+				while UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+					local MinY = HueSlider.AbsolutePosition.Y
+					local MaxY = MinY + HueSlider.AbsoluteSize.Y
+					local MouseY = math.clamp(Mouse.Y, MinY, MaxY)
+
+					Hue = ((MouseY - MinY) / (MaxY - MinY))
+					Display()
+
+					RenderStepped:Wait()
+				end
+			end
+		end)
+
+		if Config.Transparency then
+			Creator.AddSignal(TransparencySlider.InputBegan, function(Input)
+				if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+					while UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+						local MinY = TransparencySlider.AbsolutePosition.Y
+						local MaxY = MinY + TransparencySlider.AbsoluteSize.Y
+						local MouseY = math.clamp(Mouse.Y, MinY, MaxY)
+
+						Transparency = 1 - ((MouseY - MinY) / (MaxY - MinY))
+						Display()
+
+						RenderStepped:Wait()
 					end
 				end
 			end)
-
-			Table:UpdateButton()
-			Dropdown:Display()
-
-			Buttons[Button] = Table
 		end
 
-		ListSizeX = 0
-		for Button, Table in next, Buttons do
-			if Button.ButtonLabel then
-				if Button.ButtonLabel.TextBounds.X > ListSizeX then
-					ListSizeX = Button.ButtonLabel.TextBounds.X
-				end
-			end
-		end
-		ListSizeX = ListSizeX + 30
+		Display()
 
-		RecalculateCanvasSize()
-		RecalculateListSize()
+		Dialog:Button("Done", function()
+			Colorpicker:SetValue({ Hue, Sat, Vib }, Transparency)
+		end)
+		Dialog:Button("Cancel")
+		Dialog:Open()
 	end
 
-	function Dropdown:SetValues(NewValues)
-		if NewValues then
-			Dropdown.Values = NewValues
-		end
+	function Colorpicker:Display()
+		Colorpicker.Value = Color3.fromHSV(Colorpicker.Hue, Colorpicker.Sat, Colorpicker.Vib)
 
-		Dropdown:BuildDropdownList()
+		DisplayFrameColor.BackgroundColor3 = Colorpicker.Value
+		DisplayFrameColor.BackgroundTransparency = Colorpicker.Transparency
+
+		Element.Library:SafeCallback(Colorpicker.Callback, Colorpicker.Value)
+		Element.Library:SafeCallback(Colorpicker.Changed, Colorpicker.Value)
 	end
 
-	function Dropdown:OnChanged(Func)
-		Dropdown.Changed = Func
-		Func(Dropdown.Value)
+	function Colorpicker:SetValue(HSV, Transparency)
+		local Color = Color3.fromHSV(HSV[1], HSV[2], HSV[3])
+
+		Colorpicker.Transparency = Transparency or 0
+		Colorpicker:SetHSVFromRGB(Color)
+		Colorpicker:Display()
 	end
 
-	function Dropdown:SetValue(Val)
-		if Dropdown.Multi then
-			local nTable = {}
-
-			for Value, Bool in next, Val do
-				if table.find(Dropdown.Values, Value) then
-					nTable[Value] = true
-				end
-			end
-
-			Dropdown.Value = nTable
-		else
-			if not Val then
-				Dropdown.Value = nil
-			elseif table.find(Dropdown.Values, Val) then
-				Dropdown.Value = Val
-			end
-		end
-
-		Dropdown:BuildDropdownList()
-
-		Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
-		Library:SafeCallback(Dropdown.Changed, Dropdown.Value)
+	function Colorpicker:SetValueRGB(Color, Transparency)
+		Colorpicker.Transparency = Transparency or 0
+		Colorpicker:SetHSVFromRGB(Color)
+		Colorpicker:Display()
 	end
 
-	function Dropdown:Destroy()
-		DropdownFrame:Destroy()
+	function Colorpicker:OnChanged(Func)
+		Colorpicker.Changed = Func
+		Func(Colorpicker.Value)
+	end
+
+	function Colorpicker:Destroy()
+		ColorpickerFrame:Destroy()
 		Library.Options[Idx] = nil
 	end
 
-	Dropdown:BuildDropdownList()
-	Dropdown:Display()
+	Creator.AddSignal(ColorpickerFrame.Frame.MouseButton1Click, function()
+		CreateColorDialog()
+	end)
 
-	local Defaults = {}
+	Colorpicker:Display()
 
-	if type(Config.Default) == "string" then
-		local Idx = table.find(Dropdown.Values, Config.Default)
-		if Idx then
-			table.insert(Defaults, Idx)
-		end
-	elseif type(Config.Default) == "table" then
-		for _, Value in next, Config.Default do
-			local Idx = table.find(Dropdown.Values, Value)
-			if Idx then
-				table.insert(Defaults, Idx)
-			end
-		end
-	elseif type(Config.Default) == "number" and Dropdown.Values[Config.Default] ~= nil then
-		table.insert(Defaults, Config.Default)
-	end
-
-	if next(Defaults) then
-		for i = 1, #Defaults do
-			local Index = Defaults[i]
-			if Config.Multi then
-				Dropdown.Value[Dropdown.Values[Index]] = true
-			else
-				Dropdown.Value = Dropdown.Values[Index]
-			end
-
-			if not Config.Multi then
-				break
-			end
-		end
-
-		Dropdown:BuildDropdownList()
-		Dropdown:Display()
-	end
-
-	Library.Options[Idx] = Dropdown
-	return Dropdown
+	Library.Options[Idx] = Colorpicker
+	return Colorpicker
 end
 
 return Element
