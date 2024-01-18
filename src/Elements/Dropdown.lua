@@ -247,10 +247,7 @@ function Element:New(Idx, Config)
         local Values = Dropdown.Values
         local Buttons = Dropdown.Buttons or {}
         Dropdown.Buttons = Buttons
-    
-        -- Disable automatic layout updates
-        DropdownScrollFrame.UIListLayout.Enabled = false
-    
+        
         -- Loop through Values to update or create buttons
         for Idx, Value in ipairs(Values) do
             local Button = Buttons[Value]
@@ -273,7 +270,6 @@ function Element:New(Idx, Config)
         end
     
         -- Re-enable layout updates and apply them
-        DropdownScrollFrame.UIListLayout.Enabled = true
         DropdownScrollFrame.CanvasSize = UDim2.fromOffset(0, DropdownScrollFrame.UIListLayout.AbsoluteContentSize.Y)
     end
     function Element:CreateButton(Value)
