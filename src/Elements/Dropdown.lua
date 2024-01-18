@@ -245,155 +245,111 @@ function Element:New(Idx, Config)
 
     function Dropdown:BuildDropdownList()
         local Values = Dropdown.Values
-        local Buttons = {}
+        local Buttons = Dropdown.Buttons or {}
+        Dropdown.Buttons = Buttons
     
-        -- Clearing existing elements
-        for _, Element in next, DropdownScrollFrame:GetChildren() do
-            if not Element:IsA("UIListLayout") then
-                Element:Destroy()
-            end
-        end
+        -- Disable automatic layout updates
+        DropdownScrollFrame.UIListLayout.Enabled = false
     
-        -- Pre-calculate common values
-        local dropdownValue = Dropdown.Value
-        local configMulti = Config.Multi
-        local selected
-        local function updateSelected(value)
-            if configMulti then
-                selected = dropdownValue[value]
-            else
-                selected = dropdownValue == value
-            end
-        end
-    
-        -- Loop through Values
+        -- Loop through Values to update or create buttons
         for Idx, Value in ipairs(Values) do
-            local Table = {}
-    
-            -- Create ButtonSelector
-            local ButtonSelector = New("Frame", {
-                Size = UDim2.fromOffset(4, 14),
-                BackgroundColor3 = Color3.fromRGB(76, 194, 255),
-                Position = UDim2.fromOffset(-1, 16),
-                AnchorPoint = Vector2.new(0, 0.5),
-                ThemeTag = {
-                    BackgroundColor3 = "Accent",
-                },
-            }, {
-                New("UICorner", {
-                    CornerRadius = UDim.new(0, 2),
-                }),
-            })
-    
-            -- Create ButtonLabel
-            local ButtonLabel = New("TextLabel", {
-                FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json"),
-                Text = Value,
-                TextColor3 = Color3.fromRGB(200, 200, 200),
-                TextSize = 13,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-                AutomaticSize = Enum.AutomaticSize.Y,
-                BackgroundTransparency = 1,
-                Size = UDim2.fromScale(1, 1),
-                Position = UDim2.fromOffset(10, 0),
-                Name = "ButtonLabel",
-                ThemeTag = {
-                    TextColor3 = "Text",
-                },
-            })
-    
-            -- Create Button
-            local Button = New("TextButton", {
-                Size = UDim2.new(1, -5, 0, 32),
-                BackgroundTransparency = 1,
-                ZIndex = 23,
-                Text = "",
-                Parent = DropdownScrollFrame,
-                ThemeTag = {
-                    BackgroundColor3 = "DropdownOption",
-                },
-            }, {
-                ButtonSelector,
-                ButtonLabel,
-                New("UICorner", {
-                    CornerRadius = UDim.new(0, 6),
-                }),
-            })
-    
-            updateSelected(Value)
-    
-            local BackMotor, SetBackTransparency = Creator.SpringMotor(1, Button, "BackgroundTransparency")
-            local SelMotor, SetSelTransparency = Creator.SpringMotor(1, ButtonSelector, "BackgroundTransparency")
-            local SelectorSizeMotor = Flipper.SingleMotor.new(6)
-    
-            SelectorSizeMotor:onStep(function(value)
-                ButtonSelector.Size = UDim2.new(0, 4, 0, value)
-            end)
-    
-            -- Event handlers for Button
-            Creator.AddSignal(Button.MouseEnter, function()
-                SetBackTransparency(selected and 0.85 or 0.89)
-            end)
-            Creator.AddSignal(Button.MouseLeave, function()
-                SetBackTransparency(selected and 0.89 or 1)
-            end)
-            Creator.AddSignal(Button.MouseButton1Down, function()
-                SetBackTransparency(0.92)
-            end)
-            Creator.AddSignal(Button.MouseButton1Up, function()
-                SetBackTransparency(selected and 0.85 or 0.89)
-            end)
-    
-            function Table:UpdateButton()
-                updateSelected(Value)
-                SetBackTransparency(selected and 0.89 or 1)
-                SelectorSizeMotor:setGoal(Flipper.Spring.new(selected and 14 or 6, { frequency = 6 }))
-                SetSelTransparency(selected and 0 or 1)
+            local Button = Buttons[Value]
+            if not Button then
+                -- Create a new button if it does not exist
+                Button = self:CreateButton(Value)
+                Buttons[Value] = Button
+                Button.Parent = DropdownScrollFrame
             end
-    
-            ButtonLabel.InputBegan:Connect(function(Input)
-                if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-                    local Try = not selected
-    
-                    if Dropdown:GetActiveValues() == 1 and not Try and not Config.AllowNull then
-                        -- No action if not allowed to null
-                    else
-                        if configMulti then
-                            selected = Try
-                            Dropdown.Value[Value] = selected and true or nil
-                        else
-                            selected = Try
-                            Dropdown.Value = selected and Value or nil
-    
-                            for _, OtherButton in next, Buttons do
-                                OtherButton:UpdateButton()
-                            end
-                        end
-    
-                        Table:UpdateButton()
-                        Dropdown:Display()
-    
-                        Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
-                        Library:SafeCallback(Dropdown.Changed, Dropdown.Value)
-                    end
-                end
-            end)
-    
-            Table:UpdateButton()
-            Buttons[Button] = Table
+            -- Update the Button properties
+            self:UpdateButton(Button, Value)
         end
     
-        -- Recalculate size and position
-        ListSizeX = 0
-        for Button, Table in next, Buttons do
-            if Button.ButtonLabel then
-                ListSizeX = math.max(ListSizeX, Button.ButtonLabel.TextBounds.X + 30)
+        -- Remove any extra buttons if the list has shrunk
+        for Value, Button in pairs(Buttons) do
+            if not table.find(Values, Value) then
+                Button:Destroy()
+                Buttons[Value] = nil
             end
         end
     
-        RecalculateCanvasSize()
-        RecalculateListSize()
+        -- Re-enable layout updates and apply them
+        DropdownScrollFrame.UIListLayout.Enabled = true
+        DropdownScrollFrame.CanvasSize = UDim2.fromOffset(0, DropdownScrollFrame.UIListLayout.AbsoluteContentSize.Y)
+    end
+    function Element:CreateButton(Value)
+        local ButtonSelector = New("Frame", {
+            Size = UDim2.fromOffset(4, 14),
+            BackgroundColor3 = Color3.fromRGB(76, 194, 255),
+            Position = UDim2.fromOffset(-1, 16),
+            AnchorPoint = Vector2.new(0, 0.5),
+            ThemeTag = { BackgroundColor3 = "Accent" },
+        }, {
+            New("UICorner", { CornerRadius = UDim.new(0, 2) }),
+        })
+    
+        local ButtonLabel = New("TextLabel", {
+            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json"),
+            Text = Value,
+            TextColor3 = Color3.fromRGB(200, 200, 200),
+            TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            Position = UDim2.fromOffset(10, 0),
+            Name = "ButtonLabel",
+            ThemeTag = { TextColor3 = "Text" },
+        })
+    
+        local Button = New("TextButton", {
+            Size = UDim2.new(1, -5, 0, 32),
+            BackgroundTransparency = 1,
+            ZIndex = 23,
+            Text = "",
+            ThemeTag = { BackgroundColor3 = "DropdownOption" },
+        }, {
+            ButtonSelector,
+            ButtonLabel,
+            New("UICorner", { CornerRadius = UDim.new(0, 6) }),
+        })
+    
+        return Button
+    end
+
+    function Element:UpdateButton(Button, Value)
+        local ButtonLabel = Button:FindFirstChild("ButtonLabel")
+        local ButtonSelector = Button:FindFirstChildOfClass("Frame")
+    
+        if ButtonLabel then
+            ButtonLabel.Text = Value
+        end
+    
+        -- Update selected state and add event handlers
+        local selected = (self.Value == Value)
+        local BackMotor, SetBackTransparency = Creator.SpringMotor(1, Button, "BackgroundTransparency")
+        local SelMotor, SetSelTransparency = Creator.SpringMotor(1, ButtonSelector, "BackgroundTransparency")
+        local SelectorSizeMotor = Flipper.SingleMotor.new(6)
+    
+        SelectorSizeMotor:onStep(function(value)
+            ButtonSelector.Size = UDim2.new(0, 4, 0, value)
+        end)
+    
+        Creator.AddSignal(Button.MouseEnter, function()
+            SetBackTransparency(selected and 0.85 or 0.89)
+        end)
+        Creator.AddSignal(Button.MouseLeave, function()
+            SetBackTransparency(selected and 0.89 or 1)
+        end)
+        Creator.AddSignal(Button.MouseButton1Down, function()
+            SetBackTransparency(0.92)
+        end)
+        Creator.AddSignal(Button.MouseButton1Up, function()
+            SetBackTransparency(selected and 0.85 or 0.89)
+        end)
+    
+        -- Update button visuals based on the selected state
+        SetBackTransparency(selected and 0.89 or 1)
+        SelectorSizeMotor:setGoal(Flipper.Spring.new(selected and 14 or 6, { frequency = 6 }))
+        SetSelTransparency(selected and 0 or 1)
     end
 
 
